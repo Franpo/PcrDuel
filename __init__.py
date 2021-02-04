@@ -16,9 +16,9 @@ import copy
 sv = Service('pcr-duel', enable_on_default=True)
 DUEL_DB_PATH = os.path.expanduser('~/.hoshino/pcr_duel.db')
 SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
-BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 7000, 9000, 1900, 1073, 1067] # 黑名单ID
+BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 7000,7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7100, 7101, 7102, 7103, 7200, 7201, 7202, 7203, 7300, 7301, 7302, 7303, 7304, 7305, 7306, 9000, 1900, 1073, 1067] # 黑名单ID
 DLC_BLHX = [6000, 6507] #DLC碧蓝航线id的开始截止
-NO_BLHX = [] #拉黑碧蓝航线
+ADD_BLHX = [] #加入碧蓝航线
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -252,6 +252,7 @@ class ScoreCounter2:
         os.makedirs(os.path.dirname(SCORE_DB_PATH), exist_ok=True)
         self._create_table()
         self._create_pres_table()
+        self._create_mastercoin_table()
     def _connect(self):
         return sqlite3.connect(SCORE_DB_PATH)
 
@@ -308,6 +309,56 @@ class ScoreCounter2:
                 return 0
         except Exception as e:
             raise Exception(str(e))
+        
+
+     #记录大师币数据
+    def _create_mastercoin_table(self):
+        try:
+            self._connect().execute('''CREATE TABLE IF NOT EXISTS MASTERCOIN
+                          (GID             INT    NOT NULL,
+                           UID             INT    NOT NULL,
+                           COIN           INT    NOT NULL,
+                           PRIMARY KEY(GID, UID));''')
+        except:
+            raise Exception('创建表发生错误')
+
+    def _set_mastercoin(self, gid, uid, coin):
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO MASTERCOIN (GID, UID, COIN) VALUES (?, ?, ?)",
+                (gid, uid, coin),
+            )
+
+    def _get_mastercoin(self, gid, uid):
+        try:
+            r = self._connect().execute("SELECT COIN FROM MASTERCOIN WHERE GID=? AND UID=?", (gid, uid)).fetchone()
+            return None if r is None else r[0]
+        except:
+            raise Exception('查询大师币发生错误')
+
+    def _add_mastercoin(self, gid, uid, num):
+        mastercoin = self._get_mastercoin(gid, uid)
+        mastercoin += num
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO MASTERCOIN (GID, UID, COIN) VALUES (?, ?, ?)",
+                (gid, uid, mastercoin),
+            )
+
+    def _reduce_mastercoin(self, gid, uid, num):
+        mastercoin = self._get_mastercoin(gid, uid)
+        mastercoin -= num
+        mastercoin = max(mastercoin,0)
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO MASTERCOIN (GID, UID, COIN) VALUES (?, ?, ?)",
+                (gid, uid, mastercoin),
+            )
+
+
+
+
+        
 
     #记录国王声望数据
     def _create_pres_table(self):
@@ -704,19 +755,19 @@ def get_newgirl_list(gid):
     new_list = []
     for card in chara_id_list:
         if card not in BLACKLIST_ID and card not in old_list:
-            new_list.append(card)
+            if card < DLC_BLHX[0] or card > DLC_BLHX[1]:
+                new_list.append(card)
     return new_list
 
-# 生成无BLHX的没被约过角色列表
-def get_newgirl_list_noBLHX(gid):
+# 生成含碧蓝航线的没被约过角色列表
+def get_newgirl_list_addBLHX(gid):
     chara_id_list = list(_pcr_data.CHARA_NAME.keys())
     duel = DuelCounter()
     old_list = duel._get_card_list(gid)
     new_list = []
     for card in chara_id_list:
         if card not in BLACKLIST_ID and card not in old_list:
-            if card < DLC_BLHX[0] or card > DLC_BLHX[1]:
-                new_list.append(card)
+            new_list.append(card)
     return new_list
 
 
@@ -993,8 +1044,8 @@ async def add_girl(bot, ev: CQEvent):
             msg = f'您的金币不足{GACHA_COST}哦。'
             await bot.send(ev, msg, at_sender=True)
             return
-        if uid in NO_BLHX:
-            newgirllist = get_newgirl_list_noBLHX(gid)
+        if uid in ADD_BLHX:
+            newgirllist = get_newgirl_list_addBLHX(gid)
         else:
             newgirllist = get_newgirl_list(gid)
         # 判断女友是否被抢没和该用户是否已经没有女友
@@ -1527,47 +1578,48 @@ async def Force_add_girl(bot, ev: CQEvent):
     await bot.send(ev, msg, at_sender=True)
 
 
-@sv.on_prefix('分手')
+@sv.on_prefix('释放角色')
 async def breakup(bot, ev: CQEvent):
     if BREAK_UP_SWITCH == True:
         args = ev.message.extract_plain_text().split()
         gid = ev.group_id
         uid = ev.user_id
         duel = DuelCounter()
+        if duel_judger.get_on_off_accept_status(gid):
+            msg = '现在正在决斗中哦，请决斗后再释放角色吧。'
+            await bot.finish(ev, msg, at_sender=True)
         level = duel._get_level(gid, uid)
         if level == 0:
             await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
         if not args:
-            await bot.finish(ev, '请输入分手+pcr角色名。', at_sender=True)
+            await bot.finish(ev, '请输入释放角色+角色名。', at_sender=True)
         name = args[0]
         cid = chara.name2id(name)
         if cid == 1000:
             await bot.finish(ev, '请输入正确的pcr角色名。', at_sender=True)
         score_counter = ScoreCounter2()
-        needscore = 400+level*100
-        score = score_counter._get_score(gid, uid)
         cidlist = duel._get_cards(gid, uid)
         if cid not in cidlist:
             await bot.finish(ev, '该角色不在你的身边哦。', at_sender=True)
         #检测是否是皇后
         queen = duel._search_queen(gid,uid)
         if cid==queen:
-            await bot.finish(ev, '不可以和您的皇后分手哦。', at_sender=True)
-        if score < needscore:
-            msg = f'您的爵位分手一位女友需要{needscore}金币哦。\n分手不易，做好准备再来吧。'
-            await bot.finish(ev, msg, at_sender=True)
-        score_counter._reduce_score(gid, uid, needscore)
+            await bot.finish(ev, '该角色为您的皇后，不可以释放。', at_sender=True)
+        if not score_counter._get_mastercoin(gid, uid):
+            score_counter._set_mastercoin(gid,uid,0)
+        score_counter._add_mastercoin(gid, uid, 120)
+        coin = score_counter._get_mastercoin(gid, uid)
         duel._delete_card(gid, uid, cid)
         c = chara.fromid(cid)
-        msg = f'\n“真正离开的那次，关门声最小。”\n你和{c.name}分手了。失去了{needscore}金币分手费。\n{c.icon.cqcode}'
+        msg = f'\n您已释放角色{c.name}。获得了120大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
         await bot.send(ev, msg, at_sender=True)
      
 #关闭dlc碧蓝航线
 @sv.on_fullmatch('关闭碧蓝航线')
 async def close_BLHX(bot, ev: CQEvent):
     uid = ev.user_id
-    if uid not in NO_BLHX:
-        NO_BLHX.append(uid)
+    if uid in ADD_BLHX:
+        ADD_BLHX.remove(uid)
         msg = 'DLC已关闭：碧蓝航线'
         await bot.send(ev, msg, at_sender=True)
     else:
@@ -1578,8 +1630,8 @@ async def close_BLHX(bot, ev: CQEvent):
 @sv.on_fullmatch('开启碧蓝航线')
 async def open_BLHX(bot, ev: CQEvent):
     uid = ev.user_id
-    if uid in NO_BLHX:
-        NO_BLHX.remove(uid)
+    if uid not in ADD_BLHX:
+        ADD_BLHX.append(uid)
         msg = 'DLC已开启：碧蓝航线'
         await bot.send(ev, msg, at_sender=True)
     else:
@@ -1783,14 +1835,14 @@ async def cheat_prestige(bot, ev: CQEvent):
     await bot.send(ev, msg)
 
 #此功能会强制从本群所有玩家库存中删除特定角色和皇后，但不会立刻降低玩家爵位，只用做必要时清理非法数据用。
-@sv.on_prefix(['释放角色'])
-async def Release_girl(bot, ev: CQEvent):
+@sv.on_prefix(['强制移除'])
+async def Force_remove(bot, ev: CQEvent):
     if not priv.check_priv(ev, priv.SUPERUSER):
-        await bot.finish(ev, '只有机器人管理才能释放角色', at_sender=True)
+        await bot.finish(ev, '只有机器人管理才能强制移除角色', at_sender=True)
     args = ev.message.extract_plain_text().split()
     gid = ev.group_id
     if not args:
-        await bot.finish(ev, '请输入要释放的角色名', at_sender=True)
+        await bot.finish(ev, '请输入要移除的角色名', at_sender=True)
     name = args[0]
     cid = chara.name2id(name)
     if cid == 1000:
@@ -1799,7 +1851,7 @@ async def Release_girl(bot, ev: CQEvent):
     owner = duel._get_card_owner(gid, cid)
     c = chara.fromid(cid)
     if owner == 0:
-        await bot.finish(ev, '该角色是单身状态，无法被强制释放。', at_sender=True)
+        await bot.finish(ev, '该角色是单身状态，无法被强制移除。', at_sender=True)
     if duel._search_queen(gid,owner) == cid:
         duel._delete_queen_owner(gid,cid)
     duel._delete_card(gid, owner, cid)        
