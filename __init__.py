@@ -20,6 +20,7 @@ SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
 HIDDEN_CHAR = range(7000,7307)
 BLACKLIST_ID += HIDDEN_CHAR
+ON_SALE = range(7000,7010)
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -27,7 +28,6 @@ SIGN_DAILY_LIMIT = 1  # 机器人每天签到的次数
 DUEL_DAILY_LIMIT = 30 #每个人每日发起决斗上限
 RESET_HOUR = 0  # 每日使用次数的重置时间，0代表凌晨0点，1代表凌晨1点，以此类推
 GACHA_COST = 300  # 抽老婆需求
-FIND_COST = 2000  # 强娶需求
 DUEL_BONUS = 150  #决斗发起成功奖励金币
 RECEIVE_BONUS = 200 #决斗接受成功奖励金币
 ZERO_GET_AMOUNT = 150  # 没钱补给量
@@ -1354,11 +1354,11 @@ async def nobleduel(bot, ev: CQEvent):
 
     #判断被输掉的是否为皇后。    
     elif selected_girl==queen:
-        score_counter._add_score(gid, winner, 600)
-        msg = f'[CQ:at,qq={winner}]您赢得的角色为对方的皇后，\n您改为获得600金币。'
+        score_counter._add_score(gid, winner, 1000)
+        msg = f'[CQ:at,qq={winner}]您赢得的角色为对方的皇后，\n您改为获得1000金币。'
         await bot.send(ev, msg)
-        score_counter._reduce_prestige(gid,loser,2000)
-        msg = f'[CQ:at,qq={loser}]您差点输掉了皇后，失去了2000声望。'
+        score_counter._reduce_prestige(gid,loser,5000)
+        msg = f'[CQ:at,qq={loser}]您差点输掉了皇后，失去了5000声望。'
         await bot.send(ev, msg)
 
 
@@ -1595,48 +1595,72 @@ async def search_girl(bot, ev: CQEvent):
 
 
         
-#Franpo魔改功能，攒够金币直接强娶
-@sv.on_prefix(['贵族寻访'])
-async def Force_add_girl(bot, ev: CQEvent):
+#大师币商店
+@sv.on_prefix(['大师币商店'])
+async def Show_Mastershop(bot, ev: CQEvent):
+    gid = ev.group_id
+    uid = ev.user_id
+    duel = DuelCounter()
+    score_counter = ScoreCounter2()
+    if duel._get_level(gid, uid) != 7:
+        msg = '只有皇帝才可以使用大师币商店。'
+        await bot.finish(ev, msg, at_sender=True)
+    coin = score_counter._get_mastercoin(gid, uid)
+    char = " "
+    for cid in ON_SALE:
+       c = chara.fromid(cid) 
+       char += str(c.name)
+       char += "\n"
+    msg = f'''
+╔                          ╗
+大师币{coin}个
+当期限定角色为：
+{char}
+请输入购买角色+角色名
+单价1500
+╚                          ╝
+    '''
+    await bot.send(ev, msg, at_sender=True)
+
+
+    
+#大师币购买
+@sv.on_prefix(['购买角色'])
+async def Mastercoin_change(bot, ev: CQEvent):
     gid = ev.group_id
     uid = ev.user_id
     duel = DuelCounter()
     score_counter = ScoreCounter2()
     if duel_judger.get_on_off_accept_status(gid):
-        msg = '现在正在决斗中哦，请决斗后再去寻访梦中情人吧。'
+        msg = '现在正在决斗中，无法购买角色，请稍后再来。'
         await bot.finish(ev, msg, at_sender=True)
-    if duel._get_level(gid, uid) == 0:
-        msg = '您还未在本群创建过贵族，请发送 创建贵族 开始您的贵族之旅。'
+    if duel._get_level(gid, uid) != 7:
+        msg = '只有皇帝才能使用大师币商店功能。'
         duel_judger.turn_off(ev.group_id)
         await bot.finish(ev, msg, at_sender=True)
-    level = duel._get_level(gid, uid)
-    noblename = get_noblename(level)
-    girlnum = get_girlnum(level)
-    cidlist = duel._get_cards(gid, uid)
-    cidnum = len(cidlist)
-    if cidnum >= girlnum:
-        msg = '您的女友已经满了哦，快点发送[升级贵族]进行升级吧。'
-        await bot.finish(ev, msg, at_sender=True)
-    score = score_counter._get_score(gid, uid)
-    if score < FIND_COST:
-        msg = f'您的金币不足{FIND_COST}，请攒钱再来寻找梦中情人吧。'
+    coin = score_counter._get_mastercoin(gid, uid)
+    if coin < 1500:
+        msg = f'您的大师币不足，无法购买角色。'
         await bot.finish(ev, msg, at_sender=True)
     args = ev.message.extract_plain_text().split()    
     if not args:
-        await bot.send(ev, '请输入要寻访的角色名', at_sender=True)
+        await bot.send(ev, '请输入要购买的角色名', at_sender=True)
         return
     name = args[0]
     cid = chara.name2id(name)
     if cid == 1000:
-        await bot.finish(ev, '请输入正确的pcr角色名。', at_sender=True)
+        await bot.finish(ev, '请输入正确的角色名。', at_sender=True)
     owner = duel._get_card_owner(gid, cid)
     c = chara.fromid(cid)
     if owner != 0:
-        await bot.finish(ev, f'你在梦里梦到了{c.name}的样子，可是她已经名花有主了。', at_sender=True)
+        await bot.finish(ev, f'该角色已售完。', at_sender=True)
     duel._add_card(gid, uid, cid)
-    msg = f'\n你因为在梦中梦到了她的样子而陷入爱河无法自拔。你不惜重金走遍了千山万水，终于找到了她并为她戴上了定情戒指。\n寻访女友成功！\n您花费了{FIND_COST}金币\n寻访到了：{c.name}{c.icon.cqcode}'
-    score_counter._reduce_score(gid, uid, FIND_COST)
+    msg = f'使用1500大师币购买角色成功！您获得了{c.name}{c.icon.cqcode}'
+    score_counter._reduce_mastercoin(gid, uid, 1500)
     await bot.send(ev, msg, at_sender=True)
+        
+
+
 
 
 @sv.on_prefix('释放角色')
