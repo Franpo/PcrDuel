@@ -18,7 +18,15 @@ DUEL_DB_PATH = os.path.expanduser('~/.hoshino/pcr_duel.db')
 SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 7000,7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7100, 7101, 7102, 7103, 7200, 7201, 7202, 7203, 7300, 7301, 7302, 7303, 7304, 7305, 7306, 9000, 1900, 1073, 1067] # 黑名单ID
 DLC_BLHX = [6000, 6507] #DLC碧蓝航线id的开始截止
+DLC_NORA = [7000, 7009] #野良猫DLC
+DLC_KOIKAKE = [7100, 7103] #恋彼女DLC
+DLC_SAKUKOI = [7200, 7203] #樱恋DLC
+DLC_CLD = [7300, 7306] #Clover Day's
 ADD_BLHX = [] #加入碧蓝航线
+ADD_NORA = [] #野良猫
+ADD_KOIKAKE = [] #恋彼女
+ADD_SAKUKOI = [] #樱恋
+ADD_CLD = [] #Clover Day's
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -1570,6 +1578,9 @@ async def Force_add_girl(bot, ev: CQEvent):
         await bot.finish(ev, '请输入正确的pcr角色名。', at_sender=True)
     owner = duel._get_card_owner(gid, cid)
     c = chara.fromid(cid)
+    if cid in BLACKLIST_ID:
+        msg = '无法获得黑名单角色!'
+        await bot.finish(ev,msg, at_sender=True)
     if owner != 0:
         await bot.finish(ev, f'你在梦里梦到了{c.name}的样子，可是她已经名花有主了。', at_sender=True)
     duel._add_card(gid, uid, cid)
@@ -1637,6 +1648,7 @@ async def open_BLHX(bot, ev: CQEvent):
     else:
         msg = '您已经开启碧蓝航线了。'
         await bot.send(ev, msg, at_sender=True)
+
 
 
 
