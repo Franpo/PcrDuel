@@ -12,21 +12,14 @@ from hoshino.modules.priconne import chara
 from hoshino.typing import CQEvent
 from hoshino.util import DailyNumberLimiter
 import copy
+import json
 
 sv = Service('pcr-duel', enable_on_default=True)
 DUEL_DB_PATH = os.path.expanduser('~/.hoshino/pcr_duel.db')
 SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
-BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 7000,7001, 7002, 7003, 7004, 7005, 7006, 7007, 7008, 7009, 7100, 7101, 7102, 7103, 7200, 7201, 7202, 7203, 7300, 7301, 7302, 7303, 7304, 7305, 7306, 9000, 1900, 1073, 1067] # 黑名单ID
-DLC_BLHX = [6000, 6507] #DLC碧蓝航线id的开始截止
-DLC_NORA = [7000, 7009] #野良猫DLC
-DLC_KOIKAKE = [7100, 7103] #恋彼女DLC
-DLC_SAKUKOI = [7200, 7203] #樱恋DLC
-DLC_CLD = [7300, 7306] #Clover Day's
-ADD_BLHX = [] #加入碧蓝航线
-ADD_NORA = [] #野良猫
-ADD_KOIKAKE = [] #恋彼女
-ADD_SAKUKOI = [] #樱恋
-ADD_CLD = [] #Clover Day's
+BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
+HIDDEN_CHAR = range(7000,7307)
+BLACKLIST_ID += HIDDEN_CHAR
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -40,6 +33,7 @@ RECEIVE_BONUS = 200 #决斗接受成功奖励金币
 ZERO_GET_AMOUNT = 150  # 没钱补给量
 WIN_NUM = 1 #下注获胜赢得的倍率
 BREAK_UP_SWITCH = True #分手系统开关
+FILE_PATH = os.path.dirname(__file__)#用于加载dlcjson
 LEVEL_GIRL_NEED = {
         "1": 3,
         "2": 5,
@@ -128,7 +122,80 @@ async def duel_help(bot, ev: CQEvent):
 
 
 
+blhxlist = range(6001,6507)
 
+#这里记录dlc名字和对应列表
+dlcdict = {
+        'blhx':blhxlist
+        }
+
+
+# 这个字典保存保存每个DLC开启的玩家列表，pcr默认一直开启。
+dlc_switch={}
+
+with open(os.path.join(FILE_PATH,'dlc_config.json'),'r',encoding='UTF-8') as f:
+    dlc_switch = json.load(f, strict=False)
+def save_dlc_switch():
+    with open(os.path.join(FILE_PATH,'dlc_config.json'),'w',encoding='UTF-8') as f:
+        json.dump(dlc_switch,f,ensure_ascii=False)
+
+#DLC开关
+@sv.on_prefix(['开启dlc','开启DLC'])
+async def add_dlc(bot, ev: CQEvent):
+    uid = ev.user_id
+    args = ev.message.extract_plain_text().split()
+    if len(args)>= 2:
+        await bot.finish(ev, '指令格式错误。', at_sender=True)
+    if len(args)==0:
+        await bot.finish(ev, '请输入开启dlc+dlc名。', at_sender=True)
+    dlcname = args[0]
+    if dlcname not in dlcdict.keys():
+        await bot.finish(ev, 'DLC名填写错误。', at_sender=True)        
+    if uid in dlc_switch[dlcname]:
+        await bot.finish(ev, '您已开启此dlc。', at_sender=True)
+    dlc_switch[dlcname].append(uid)
+    save_dlc_switch()
+    await bot.finish(ev, f'开启dlc {dlcname}  成功。', at_sender=True)
+
+@sv.on_prefix(['关闭dlc','关闭DLC'])
+async def delete_dlc(bot, ev: CQEvent):
+    uid = ev.user_id
+    args = ev.message.extract_plain_text().split()
+    if len(args)>= 2:
+        await bot.finish(ev, '指令格式错误', at_sender=True)
+    if len(args)==0:
+        await bot.finish(ev, '请输入关闭dlc+dlc名。', at_sender=True)
+    dlcname = args[0]
+    if dlcname not in dlcdict.keys():
+        await bot.finish(ev, 'DLC名填写错误', at_sender=True)        
+    if uid not in dlc_switch[dlcname]:
+        await bot.finish(ev, '您未开启此dlc。', at_sender=True)
+    dlc_switch[dlcname].remove(uid)
+    save_dlc_switch()
+    await bot.finish(ev, f'关闭dlc {dlcname}  成功。', at_sender=True)
+
+@sv.on_fullmatch(['dlc列表','DLC列表'])
+async def intro_dlc(bot, ev: CQEvent):
+    msg = '可用DLC列表：\n\n'
+    i=1
+    for dlc in dlcdict.keys():
+        msg+=f'{i}.{dlc}:\n'
+        intro = dlcintro[dlc]
+        msg+=f'介绍:{intro}\n'
+        num = len(dlcdict[dlc])
+        msg+=f'共有{num}名角色\n\n'
+        i+=1
+    msg+= '发送 开启\关闭dlc+dlc名\n可开启\关闭dlc\n关闭的dlc不会被抽到，但是角色仍留在玩家仓库，可以被抢走。'    
+    await bot.finish(ev, msg)
+
+#取得该玩家未开启的dlc所形成的黑名单
+def get_dlc_blacklist(uid):
+
+    dlc_blacklist=[]
+    for dlc in dlcdict.keys():
+        if uid not in dlc_switch[dlc]:
+            dlc_blacklist += dlcdict[dlc]
+    return dlc_blacklist
 
 
 # noinspection SqlResolve
@@ -366,6 +433,8 @@ class ScoreCounter2:
 
 
 
+
+
         
 
     #记录国王声望数据
@@ -482,6 +551,8 @@ class DuelCounter:
                 "DELETE FROM CHARATABLE  WHERE GID=? AND CID=?",
                 (gid, cid),
             )
+
+
 
 
 # 查询已被邀请的女友列表
@@ -756,28 +827,16 @@ def get_pcr_id():
 
 
 # 生成没被约过的角色列表
-def get_newgirl_list(gid):
+def get_newgirl_list(gid ,uid):
     chara_id_list = list(_pcr_data.CHARA_NAME.keys())
     duel = DuelCounter()
     old_list = duel._get_card_list(gid)
+    dlc_blacklist = get_dlc_blacklist(uid)
     new_list = []
     for card in chara_id_list:
-        if card not in BLACKLIST_ID and card not in old_list:
-            if card < DLC_BLHX[0] or card > DLC_BLHX[1]:
-                new_list.append(card)
-    return new_list
-
-# 生成含碧蓝航线的没被约过角色列表
-def get_newgirl_list_addBLHX(gid):
-    chara_id_list = list(_pcr_data.CHARA_NAME.keys())
-    duel = DuelCounter()
-    old_list = duel._get_card_list(gid)
-    new_list = []
-    for card in chara_id_list:
-        if card not in BLACKLIST_ID and card not in old_list:
+        if card not in BLACKLIST_ID and card not in old_list and card not in dlc_blacklist:
             new_list.append(card)
     return new_list
-
 
 
 # 取爵位名
@@ -899,7 +958,7 @@ async def add_noble(bot, ev: CQEvent):
             return
         
         #判定本群女友是否已空，如果空则分配一个复制人可可萝。
-        newgirllist = get_newgirl_list(gid)
+        newgirllist = get_newgirl_list(gid, uid)
         if len(newgirllist) == 0:
             cid = 9999
             c = chara.fromid(1059)
@@ -986,7 +1045,7 @@ async def inquire_noble(bot, ev: CQEvent):
         if prestige == None:
             partmsg = '未开启声望系统。'
         else:
-            partmsg = f'您的声望为{prestige}点'
+            partmsg = f'声望{prestige}'
         
           
         #判断有无皇后        
@@ -994,13 +1053,10 @@ async def inquire_noble(bot, ev: CQEvent):
         if queen == 0:        
             msg = f'''
 ╔                          ╗
-  您的爵位为{noblename}
-  您的金币为{score}
+爵位{noblename} 金币{score}
   {partmsg}
-  您共可拥有{girlnum}名女友
-  您已拥有{cidnum}名女友
-  她们是：
-    {mes}   
+  女友{cidnum}/{girlnum}名
+  {mes}   
 ╚                          ╝
 '''
         else:
@@ -1052,10 +1108,7 @@ async def add_girl(bot, ev: CQEvent):
             msg = f'您的金币不足{GACHA_COST}哦。'
             await bot.send(ev, msg, at_sender=True)
             return
-        if uid in ADD_BLHX:
-            newgirllist = get_newgirl_list_addBLHX(gid)
-        else:
-            newgirllist = get_newgirl_list(gid)
+        newgirllist = get_newgirl_list(gid, uid)
         # 判断女友是否被抢没和该用户是否已经没有女友
         if len(newgirllist) == 0:
             if cidnum!=0:
@@ -1578,9 +1631,6 @@ async def Force_add_girl(bot, ev: CQEvent):
         await bot.finish(ev, '请输入正确的pcr角色名。', at_sender=True)
     owner = duel._get_card_owner(gid, cid)
     c = chara.fromid(cid)
-    if cid in BLACKLIST_ID:
-        msg = '无法获得黑名单角色!'
-        await bot.finish(ev,msg, at_sender=True)
     if owner != 0:
         await bot.finish(ev, f'你在梦里梦到了{c.name}的样子，可是她已经名花有主了。', at_sender=True)
     duel._add_card(gid, uid, cid)
@@ -1648,7 +1698,6 @@ async def open_BLHX(bot, ev: CQEvent):
     else:
         msg = '您已经开启碧蓝航线了。'
         await bot.send(ev, msg, at_sender=True)
-
 
 
 
