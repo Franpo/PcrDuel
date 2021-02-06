@@ -123,10 +123,12 @@ async def duel_help(bot, ev: CQEvent):
 
 
 blhxlist = range(6001,6507)
+majsoullist = range(7400,7476)
 
 #这里记录dlc名字和对应列表
 dlcdict = {
-        'blhx':blhxlist
+        'blhx':blhxlist,
+        'majsoul':majsoullist
         }
 
 
@@ -1361,6 +1363,15 @@ async def nobleduel(bot, ev: CQEvent):
         msg = f'[CQ:at,qq={loser}]您差点输掉了皇后，失去了5000声望。'
         await bot.send(ev, msg)
 
+    #判断被输掉的是否是限定角色：
+    elif selected_girl in BLACKLIST_ID:
+        score_counter._add_score(gid, winner, 500)
+        msg = f'[CQ:at,qq={winner}]您赢得的角色为大师币限定角色，\n您改为获得500金币。'
+        await bot.send(ev, msg)
+        score_counter._reduce_prestige(gid,loser,1000)
+        msg = f'[CQ:at,qq={loser}]您差点失去限定角色，作为代替损失了1000声望。'
+        await bot.send(ev, msg)
+
 
     elif girl_outlimit(gid,winner):
         score_counter._add_score(gid, winner, 300)
@@ -1697,30 +1708,6 @@ async def breakup(bot, ev: CQEvent):
         duel._delete_card(gid, uid, cid)
         c = chara.fromid(cid)
         msg = f'\n您已释放角色{c.name}。获得了120大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
-        await bot.send(ev, msg, at_sender=True)
-     
-#关闭dlc碧蓝航线
-@sv.on_fullmatch('关闭碧蓝航线')
-async def close_BLHX(bot, ev: CQEvent):
-    uid = ev.user_id
-    if uid in ADD_BLHX:
-        ADD_BLHX.remove(uid)
-        msg = 'DLC已关闭：碧蓝航线'
-        await bot.send(ev, msg, at_sender=True)
-    else:
-        msg = '您已经关闭碧蓝航线了。'
-        await bot.send(ev, msg, at_sender=True)
-
-#开启dlc碧蓝航线
-@sv.on_fullmatch('开启碧蓝航线')
-async def open_BLHX(bot, ev: CQEvent):
-    uid = ev.user_id
-    if uid not in ADD_BLHX:
-        ADD_BLHX.append(uid)
-        msg = 'DLC已开启：碧蓝航线'
-        await bot.send(ev, msg, at_sender=True)
-    else:
-        msg = '您已经开启碧蓝航线了。'
         await bot.send(ev, msg, at_sender=True)
 
 
