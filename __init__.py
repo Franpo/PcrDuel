@@ -20,7 +20,7 @@ SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
 HIDDEN_CHAR = range(7000,7399)  #限定角色就扔到这个范围里,超出范围默认普池,以后不够再改#
 BLACKLIST_ID += HIDDEN_CHAR
-ON_SALE = range(7020,7034)  #本期售卖角色 2021-2-9#
+ON_SALE = range(7050,7057)  #本期售卖角色 2021-2-9#
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -132,7 +132,7 @@ async def duel_help_plus(bot,ev: CQEvent):
 发送"dlc列表"可查看现在包含的dlc
 发送"开启/关闭dlc dlc名称"即可开启或关闭某些dlc
 发送"大师币商店"可查询商店列表
-发送"释放角色 角色名"可释放这名角色并获得{MCbrerakup}大师币
+发送"释放角色 角色名"可释放这名角色并获得{MCbreakup}大师币
 '''
     await bot.send(ev, msg, at_sender=True)
 
