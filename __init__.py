@@ -18,9 +18,9 @@ sv = Service('pcr-duel', enable_on_default=True)
 DUEL_DB_PATH = os.path.expanduser('~/.hoshino/pcr_duel.db')
 SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
-HIDDEN_CHAR = range(7000,7307)
+HIDDEN_CHAR = range(7000,7399)  #限定角色就扔到这个范围里,超出范围默认普池,以后不够再改#
 BLACKLIST_ID += HIDDEN_CHAR
-ON_SALE = range(7000,7010)
+ON_SALE = range(7020,7034)  #本期售卖角色 2021-2-9#
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -34,6 +34,10 @@ ZERO_GET_AMOUNT = 150  # 没钱补给量
 WIN_NUM = 1 #下注获胜赢得的倍率
 BREAK_UP_SWITCH = True #分手系统开关
 FILE_PATH = os.path.dirname(__file__)#用于加载dlcjson
+#大师币相关
+MC.price = 1500 #单个角色购买价格
+MC.breakup = 120 #分解角色获得的大师币
+
 LEVEL_GIRL_NEED = {
         "1": 3,
         "2": 5,
@@ -121,6 +125,16 @@ async def duel_help(bot, ev: CQEvent):
     await bot.send(ev, R.img('duel.png').cqcode)
 
 
+#魔改帮助部分
+@sv.on_fullmatch(['贵族决斗帮助plus','贵族帮助plus','贵族指令plus'])
+async def duel_help_plus(bot,ev: CQEvent):
+    msg = f'''
+发送"dlc列表"可查看现在包含的dlc
+发送"开启/关闭dlc dlc名称"即可开启或关闭某些dlc
+发送"大师币商店"可查询商店列表
+发送"释放角色 角色名"可释放这名角色并获得{MC.brerakup}大师币
+'''
+    await bot.send(ev, msg, at_sender=True)
 
 blhxlist = range(6001,6507)
 majsoullist = range(7400,7476)
@@ -130,7 +144,6 @@ dlcdict = {
         'blhx':blhxlist,
         'majsoul':majsoullist
         }
-
 
 # 这个字典保存保存每个DLC开启的玩家列表，pcr默认一直开启。
 dlc_switch={}
@@ -1628,7 +1641,7 @@ async def Show_Mastershop(bot, ev: CQEvent):
 当期限定角色为：
 {char}
 请输入购买角色+角色名
-单价1500
+单价{MC.price}
 ╚                          ╝
     '''
     await bot.send(ev, msg, at_sender=True)
@@ -1650,7 +1663,7 @@ async def Mastercoin_change(bot, ev: CQEvent):
         duel_judger.turn_off(ev.group_id)
         await bot.finish(ev, msg, at_sender=True)
     coin = score_counter._get_mastercoin(gid, uid)
-    if coin < 1500:
+    if coin < MC.price:
         msg = f'您的大师币不足，无法购买角色。'
         await bot.finish(ev, msg, at_sender=True)
     args = ev.message.extract_plain_text().split()    
@@ -1666,8 +1679,8 @@ async def Mastercoin_change(bot, ev: CQEvent):
     if owner != 0:
         await bot.finish(ev, f'该角色已售完。', at_sender=True)
     duel._add_card(gid, uid, cid)
-    msg = f'使用1500大师币购买角色成功！您获得了{c.name}{c.icon.cqcode}'
-    score_counter._reduce_mastercoin(gid, uid, 1500)
+    msg = f'使用[MC.price}大师币购买角色成功！您获得了{c.name}{c.icon.cqcode}'
+    score_counter._reduce_mastercoin(gid, uid, MC.price)
     await bot.send(ev, msg, at_sender=True)
         
 
@@ -1703,11 +1716,11 @@ async def breakup(bot, ev: CQEvent):
             await bot.finish(ev, '该角色为您的皇后，不可以释放。', at_sender=True)
         if not score_counter._get_mastercoin(gid, uid):
             score_counter._set_mastercoin(gid,uid,0)
-        score_counter._add_mastercoin(gid, uid, 120)
+        score_counter._add_mastercoin(gid, uid, MC.breakup)
         coin = score_counter._get_mastercoin(gid, uid)
         duel._delete_card(gid, uid, cid)
         c = chara.fromid(cid)
-        msg = f'\n您已释放角色{c.name}。获得了120大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
+        msg = f'\n您已释放角色{c.name}。获得了{MC.breakup}大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
         await bot.send(ev, msg, at_sender=True)
 
 
