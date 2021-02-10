@@ -37,6 +37,7 @@ FILE_PATH = os.path.dirname(__file__)#用于加载dlcjson
 #大师币相关
 MCprice = 1500 #单个角色购买价格
 MCbreakup = 120 #分解角色获得的大师币
+MCrate = 10 #分解限定角色获得的大师币倍率
 
 LEVEL_GIRL_NEED = {
         "1": 3,
@@ -1687,7 +1688,7 @@ async def Mastercoin_change(bot, ev: CQEvent):
 
 
 
-@sv.on_prefix('释放角色')
+@sv.on_prefix(['释放角色','释放女友'])
 async def breakup(bot, ev: CQEvent):
     if BREAK_UP_SWITCH == True:
         args = ev.message.extract_plain_text().split()
@@ -1714,6 +1715,9 @@ async def breakup(bot, ev: CQEvent):
         queen = duel._search_queen(gid,uid)
         if cid==queen:
             await bot.finish(ev, '该角色为您的皇后，不可以释放。', at_sender=True)
+        #释放限定角色二次确认
+        if cid in HIDDEN_CHAR:
+            await bot.finish(ev, '该角色为限定角色,请输入"释放限定角色 角色名"', at_sender=True)
         if not score_counter._get_mastercoin(gid, uid):
             score_counter._set_mastercoin(gid,uid,0)
         score_counter._add_mastercoin(gid, uid, MCbreakup)
@@ -1723,7 +1727,41 @@ async def breakup(bot, ev: CQEvent):
         msg = f'\n您已释放角色{c.name}。获得了{MCbreakup}大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
         await bot.send(ev, msg, at_sender=True)
 
-
+@sv.on_prefix('释放限定角色')
+async def breakup(bot, ev: CQEvent):
+    if BREAK_UP_SWITCH == True:
+        args = ev.message.extract_plain_text().split()
+        gid = ev.group_id
+        uid = ev.user_id
+        duel = DuelCounter()
+        if duel_judger.get_on_off_accept_status(gid):
+            msg = '现在正在决斗中哦，请决斗后再释放角色吧。'
+            await bot.finish(ev, msg, at_sender=True)
+        level = duel._get_level(gid, uid)
+        if level == 0:
+            await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
+        if not args:
+            await bot.finish(ev, '请输入释放限定角色+角色名。', at_sender=True)
+        name = args[0]
+        cid = chara.name2id(name)
+        if cid not in HIDDEN_CHAR:
+            await bot.finish(ev, '请输入正确的限定角色名。', at_sender=True)
+        score_counter = ScoreCounter2()
+        cidlist = duel._get_cards(gid, uid)
+        if cid not in cidlist:
+            await bot.finish(ev, '该角色不在你的身边哦。', at_sender=True)
+        queen = duel._search_queen(gid,uid)
+        if cid==queen:
+            await bot.finish(ev, '该角色为您的皇后，不可以释放。', at_sender=True)
+        if not score_counter._get_mastercoin(gid, uid):
+            score_counter._set_mastercoin(gid,uid,0)
+        MCR = MCbreakup * MCrate  #释放角色获得的基数*倍率
+        score_counter._add_mastercoin(gid, uid, MCR)
+        coin = score_counter._get_mastercoin(gid, uid)
+        duel._delete_card(gid, uid, cid)
+        c = chara.fromid(cid)
+        msg = f'\n您已释放角色{c.name}。获得了{MCR}大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
+        await bot.send(ev, msg, at_sender=True)
 
 #国王以上声望部分。
 
@@ -1854,9 +1892,31 @@ async def reset_score(bot, ev: CQEvent):
         if duel._get_level(gid, id) == 0:
             await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
         score_counter = ScoreCounter2()    
-        current_score = score_counter._get_score(gid, id)
+        current_score = score_counter._get_mastercoin(gid, id)
         score_counter._reduce_score(gid, id,current_score)
         await bot.finish(ev, f'已清空用户{id}的金币。', at_sender=True)
+
+#重置大师币
+@sv.on_prefix('重置大师币')
+async def reset_score(bot, ev: CQEvent):
+    gid = ev.group_id
+    if not priv.check_priv(ev, priv.SUPERUSER):
+        await bot.finish(ev, '只有维护组才能使用重置大师币功能哦。', at_sender=True)
+    args = ev.message.extract_plain_text().split()
+    if len(args)>=2:
+        await bot.finish(ev, '指令格式错误', at_sender=True)
+    if len(args)==0:
+        await bot.finish(ev, '请输入重置大师币+被重置者QQ', at_sender=True)
+    else :
+        id = args[0]
+        duel = DuelCounter()
+        if duel._get_level(gid, id) == 0:
+            await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
+        score_counter = ScoreCounter2()    
+        current_score = score_counter._get_mastercoin(gid, id)
+        score_counter._reduce_mastercoin(gid, id,current_score)
+        await bot.finish(ev, f'已清空用户{id}的大师币。', at_sender=True)
+
         
 #注意会清空此人的角色以及贵族等级，只用做必要时删库用。 
 @sv.on_prefix('重置角色')
@@ -1896,6 +1956,24 @@ async def cheat_score(bot, ev: CQEvent):
     score_counter._add_score(gid, id, num)
     score = score_counter._get_score(gid, id)
     msg = f'已为[CQ:at,qq={id}]充值{num}金币。\n现在共有{score}金币。'
+    await bot.send(ev, msg)
+
+#充值大师币
+@sv.on_rex(f'^为(\d+)充值(\d+)大师币$')
+async def cheat_mastercoin(bot, ev: CQEvent):
+    if not priv.check_priv(ev, priv.SUPERUSER):
+        await bot.finish(ev, '不要想着走捷径哦。', at_sender=True)
+    gid = ev.group_id
+    match = ev['match']
+    id = int(match.group(1))
+    num = int(match.group(2))
+    duel = DuelCounter()
+    score_counter = ScoreCounter2()
+    if duel._get_level(gid, id) == 0:
+        await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
+    score_counter._add_mastercoin(gid, id, num)
+    coin = score_counter._get_mastercoin(gid, id)
+    msg = f'已为[CQ:at,qq={id}]充值{num}大师币。\n现在共有{coin}大师币'
     await bot.send(ev, msg)
 
 #提升声望
