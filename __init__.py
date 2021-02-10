@@ -1892,7 +1892,7 @@ async def reset_score(bot, ev: CQEvent):
         if duel._get_level(gid, id) == 0:
             await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
         score_counter = ScoreCounter2()    
-        current_score = score_counter._get_score(gid, id)
+        current_score = score_counter._get_mastercoin(gid, id)
         score_counter._reduce_score(gid, id,current_score)
         await bot.finish(ev, f'已清空用户{id}的金币。', at_sender=True)
 
