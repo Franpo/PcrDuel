@@ -20,7 +20,7 @@ SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
 HIDDEN_CHAR = range(7000,7399)  #限定角色就扔到这个范围里,超出范围默认普池,以后不够再改#
 BLACKLIST_ID += HIDDEN_CHAR
-ON_SALE = range(7050,7057)  #本期售卖角色 2021-2-9#
+ON_SALE = range(7020,7027)  #本期售卖角色 2021-2-21
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -1580,6 +1580,20 @@ async def get_score(bot, ev: CQEvent):
     except Exception as e:
         await bot.send(ev, '错误:\n' + str(e))
 
+@sv.on_prefix(['查大师币','查询大师币','查看大师币'])
+async def get_mastercoin(bot, ev: CQEvent):
+    try:
+        score_counter = ScoreCounter2()
+        gid = ev.group_id
+        uid = ev.user_id
+
+        current_mastercoin = score_counter._get_mastercoin(gid, uid)
+        msg = f'您的大师币为{current_mastercoin}'
+        await bot.send(ev, msg, at_sender=True)
+        return
+    except Exception as e:
+        await bot.send(ev, '错误:\n' + str(e))
+
 
 @sv.on_fullmatch('重置决斗')
 async def init_duel(bot, ev: CQEvent):
@@ -1673,7 +1687,7 @@ async def Mastercoin_change(bot, ev: CQEvent):
         return
     name = args[0]
     cid = chara.name2id(name)
-    if cid == 1000:
+    if cid not in ON_SALE:
         await bot.finish(ev, '请输入正确的角色名。', at_sender=True)
     owner = duel._get_card_owner(gid, cid)
     c = chara.fromid(cid)
@@ -1898,7 +1912,7 @@ async def reset_score(bot, ev: CQEvent):
 
 #重置大师币
 @sv.on_prefix('重置大师币')
-async def reset_score(bot, ev: CQEvent):
+async def reset_mastercoin(bot, ev: CQEvent):
     gid = ev.group_id
     if not priv.check_priv(ev, priv.SUPERUSER):
         await bot.finish(ev, '只有维护组才能使用重置大师币功能哦。', at_sender=True)
