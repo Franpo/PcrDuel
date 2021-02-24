@@ -28,6 +28,7 @@ SIGN_DAILY_LIMIT = 1  # 机器人每天签到的次数
 DUEL_DAILY_LIMIT = 30 #每个人每日发起决斗上限
 RESET_HOUR = 0  # 每日使用次数的重置时间，0代表凌晨0点，1代表凌晨1点，以此类推
 GACHA_COST = 300  # 抽老婆需求
+MASTERCOIN_GACHA_COST = 500 #大师币扭蛋需求
 DUEL_BONUS = 150  #决斗发起成功奖励金币
 RECEIVE_BONUS = 200 #决斗接受成功奖励金币
 ZERO_GET_AMOUNT = 150  # 没钱补给量
@@ -134,6 +135,8 @@ async def duel_help_plus(bot,ev: CQEvent):
 发送"开启/关闭dlc dlc名称"即可开启或关闭某些dlc
 发送"大师币商店"可查询商店列表
 发送"释放角色 角色名"可释放这名角色并获得{MCbreakup}大师币
+发送"大师币扭蛋"可花费500金币招募女友,并附赠一次抽取大师币的机会
+发送"释放全部角色"可释放除皇后和限定角色之外的角色,并获得大师币
 '''
     await bot.send(ev, msg, at_sender=True)
 
@@ -1157,6 +1160,61 @@ async def add_girl(bot, ev: CQEvent):
         msg = f'\n{wintext}\n招募女友成功！\n您花费了{GACHA_COST}金币\n新招募的女友为：{c.name}{c.icon.cqcode}'
         await bot.send(ev, msg, at_sender=True)
 
+@sv.on_fullmatch(['大师币扭蛋','大师币招募'])
+async def mastercoin_gacha(bot, ev: CQEvent):
+    gid = ev.group_id
+    uid = ev.user_id
+    duel = DuelCounter()
+    score_counter = ScoreCounter2()
+    if duel_judger.get_on_off_accept_status(gid):
+        msg = '现在正在决斗中哦，请决斗后再进行扭蛋吧。'
+        await bot.send(ev, msg, at_sender=True)
+        return
+    if duel._get_level(gid, uid) == 0:
+        msg = '您还未在本群创建过贵族，请发送 创建贵族 开始您的贵族之旅。'
+        duel_judger.turn_off(ev.group_id)
+
+        await bot.send(ev, msg, at_sender=True)
+        return
+    else:
+         # 防止女友数超过上限
+        level = duel._get_level(gid, uid)
+        noblename = get_noblename(level)
+        girlnum = get_girlnum(level)
+        cidlist = duel._get_cards(gid, uid)
+        cidnum = len(cidlist)
+        if cidnum >= girlnum:
+            msg = '您的女友已经满了哦，快点发送[升级贵族]进行升级吧。'
+            await bot.send(ev, msg, at_sender=True)
+            return
+        score = score_counter._get_score(gid, uid)
+        if score < MASTERCOIN_GACHA_COST:
+            msg = f'您的金币不足{MASTERCOIN_GACHA_COST}哦。'
+            await bot.send(ev, msg, at_sender=True)
+            return
+        newgirllist = get_newgirl_list(gid, uid)
+        # 判断女友是否被抢没和该用户是否已经没有女友
+        if len(newgirllist) == 0:
+            if cidnum!=0:
+                await bot.send(ev, '这个群已经没有可以约到的新女友了哦。', at_sender=True)
+                return   
+
+        cid = random.choice(newgirllist)
+        duel._add_card(gid, uid, cid)
+        c = chara.fromid(cid)
+        #大师币部分
+        MCoinrate = GACHA_COST / MCbreakup #获得大师币的基准数
+        if GACHA_COST >= MASTERCOIN_GACHA_COST:
+            await bot.send(ev, '扭蛋金币数配置错误,请重新调整', at_sender=True)
+            return
+        r_ = random.randint(6,20)
+        Mcoin =  ((( MASTERCOIN_GACHA_COST - GACHA_COST ) / MCoinrate ) * r_ ) / 10
+
+        score_counter._reduce_score(gid, uid, MASTERCOIN_GACHA_COST)
+        score_counter._add_mastercoin(gid, uid , Mcoin)
+        msg = f'您花费了{MASTERCOIN_GACHA_COST}金币\n获得了{Mcoin}大师币\n新招募的女友为：{c.name}{c.icon.cqcode}'
+        await bot.send(ev, msg, at_sender=True)
+
 
 @sv.on_fullmatch(['升级爵位', '升级贵族','贵族升级'])
 async def add_girl(bot, ev: CQEvent):
@@ -1776,6 +1834,52 @@ async def breakup(bot, ev: CQEvent):
         c = chara.fromid(cid)
         msg = f'\n您已释放角色{c.name}。获得了{MCR}大师币。目前大师币数量为{coin}。\n{c.icon.cqcode}'
         await bot.send(ev, msg, at_sender=True)
+
+@sv.on_prefix(['释放全部角色','释放全部女友'])
+async def breakup_all(bot, ev: CQEvent):
+     if BREAK_UP_SWITCH == True:
+        args = ev.message.extract_plain_text().split()
+        gid = ev.group_id
+        uid = ev.user_id
+        duel = DuelCounter()    
+        score_counter = ScoreCounter2()
+        if duel_judger.get_on_off_accept_status(gid):
+            msg = '现在正在决斗中哦，请决斗后再释放角色吧。'
+            await bot.finish(ev, msg, at_sender=True)
+        level = duel._get_level(gid, uid)
+        if level == 0:
+            await bot.finish(ev, '该用户还未在本群创建贵族哦。', at_sender=True)
+        if not args:
+            await bot.finish(ev, '将释放除皇后和限定角色之外的所有角色\n请输入释放全部角色+确认。', at_sender=True)
+        confirm = args[0]
+        if confirm != '确认':
+            return
+        cidlist = duel._get_cards(gid, uid)
+        breakuplist = []
+        count = 0 
+        queen = duel._search_queen(gid,uid)
+        while len(cidlist) > 0:
+            cid = cidlist[0]
+            if cidlist[0] in BLACKLIST_ID:
+                del cidlist[0]
+            else:
+                if cidlist[0] == queen:
+                    del cidlist[0]
+                else:
+                    duel._delete_card(gid, uid, cid)
+                    count = count + 1
+                    c = chara.fromid(cid)
+                    breakuplist.append(c.name)
+                    del cidlist[0]
+        if count == 0:
+            await bot.finish(ev, '没有释放成功的角色,操作已取消', at_sender=True)
+        else:
+            Mcoin = count * MCbreakup
+            score_counter._add_mastercoin(gid, uid, Mcoin)
+            msg = f'已成功释放{count}名角色\n获得了{Mcoin}大师币\n释放的角色为:\n{breakuplist[0:count]}'
+            await bot.send(ev, msg)
+
+
 
 #国王以上声望部分。
 
