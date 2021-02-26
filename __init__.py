@@ -1690,6 +1690,28 @@ async def search_girl(bot, ev: CQEvent):
         msg = f'{c.name}现在正在\n[CQ:at,qq={owner}]的身边哦。{c.icon.cqcode}'
         await bot.send(ev, msg)
 
+@sv.on_fullmatch('女友列表')
+async def girl_list(bot, ev: CQEvent):
+    gid = ev.group_id
+    uid = ev.user_id
+    duel = DuelCounter()
+    score_counter = ScoreCounter2()
+    if duel._get_level(gid, uid) == 0:
+        msg = '您还未在本群创建过贵族，请发送 创建贵族 开始您的贵族之旅。'
+        await bot.send(ev, msg, at_sender=True)
+        return
+    cidlist = duel._get_cards(gid, uid)
+    char = ""
+    for cid in cidlist:
+        c = chara.fromid(cid)
+        char += str(c.name)
+        char += " "
+    if char == "":
+        msg = f'您尚未拥有女友,发送"贵族约会"来获取女友吧'
+    else:
+        msg = f'您的女友为:\n{char}'
+    await bot.send(ev, msg, at_sender=True)
+
 
         
 #大师币商店
@@ -1703,12 +1725,16 @@ async def Show_Mastershop(bot, ev: CQEvent):
         msg = '只有皇帝才可以使用大师币商店。'
         await bot.finish(ev, msg, at_sender=True)
     coin = score_counter._get_mastercoin(gid, uid)
-    char = " "
+    char = ""
     for cid in ON_SALE:
        c = chara.fromid(cid) 
-       char += str(c.name)
-       char += "\n"
-    msg = f'''
+       if duel._get_card_owner(gid, cid) == 0:
+           char += str(c.name)
+           char += "\n"
+    if char == "":
+        msg = f'大师币商店已售光,请联系管理员'
+    else:
+        msg = f'''
 ╔                          ╗
 大师币{coin}个
 当期限定角色为：
@@ -1855,9 +1881,9 @@ async def breakup_all(bot, ev: CQEvent):
         if confirm != '确认':
             return
         cidlist = duel._get_cards(gid, uid)
-        breakuplist = []
         count = 0 
         queen = duel._search_queen(gid,uid)
+        char = " "
         while len(cidlist) > 0:
             cid = cidlist[0]
             if cidlist[0] in BLACKLIST_ID:
@@ -1869,14 +1895,15 @@ async def breakup_all(bot, ev: CQEvent):
                     duel._delete_card(gid, uid, cid)
                     count = count + 1
                     c = chara.fromid(cid)
-                    breakuplist.append(c.name)
+                    char += str(c.name)
+                    char += " "
                     del cidlist[0]
         if count == 0:
             await bot.finish(ev, '没有释放成功的角色,操作已取消', at_sender=True)
         else:
             Mcoin = count * MCbreakup
             score_counter._add_mastercoin(gid, uid, Mcoin)
-            msg = f'已成功释放{count}名角色\n获得了{Mcoin}大师币\n释放的角色为:\n{breakuplist[0:count]}'
+            msg = f'已成功释放{count}名角色\n获得了{Mcoin}大师币\n释放的角色为:\n{char}'
             await bot.send(ev, msg)
 
 
