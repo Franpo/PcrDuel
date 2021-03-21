@@ -1,11 +1,11 @@
 import asyncio
 import base64
-import os
+import os,sys
 import random
 import sqlite3
 from datetime import datetime, timedelta
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from hoshino import R, Service, priv
 from hoshino.modules.priconne import _pcr_data
 from hoshino.modules.priconne import chara
@@ -20,7 +20,7 @@ SCORE_DB_PATH = os.path.expanduser('~/.hoshino/pcr_running_counter.db')
 BLACKLIST_ID = [1000, 1072, 1900, 1907, 1908, 1909, 1910, 1913, 1914, 1915, 1916, 1917, 1918, 1919, 1920, 4031, 9000, 1900, 1073, 1067] # 黑名单ID
 HIDDEN_CHAR = range(7000,7399)  #限定角色就扔到这个范围里,超出范围默认普池,以后不够再改#
 BLACKLIST_ID += HIDDEN_CHAR
-ON_SALE = range(7020,7027)  #本期售卖角色 2021-2-21
+ON_SALE = range(7080,7083)  #本期售卖角色 2021-3-20
 WAIT_TIME = 30 # 对战接受等待时间
 DUEL_SUPPORT_TIME = 30 # 赌钱等待时间
 DB_PATH = os.path.expanduser("~/.hoshino/pcr_duel.db")
@@ -911,6 +911,21 @@ def concat_pic(pics, border=0):
         h += pic.size[1]        
     return des
 
+#女友列表生成图片
+def generator_img(width, height, color, path):
+    img = Image.new('RGB', (width, height), (color["r"], color["g"], color["b"]))
+    img.save(path)
+
+def create_img(value, path):
+    fontpath = "./hoshino/modules/priconne/pcr_duel/simhei.ttf"
+    font = ImageFont.truetype(fontpath, 20) #字体大小
+    img = Image.open(path)
+    draw = ImageDraw.Draw(img)
+
+    draw.text((0, 0), value, font=font, fill=(0,0,0))
+    img.save(path)
+
+
 
 
 @sv.on_fullmatch('贵族签到')
@@ -1239,7 +1254,7 @@ async def add_girl(bot, ev: CQEvent):
         return
 
     if level == 6:
-        msg = f'您已经是国王了， 需要通过声望加冕称帝哦。'
+        msg = f'您已经是国王了， 加冕称帝哦。'
         await bot.send(ev, msg, at_sender=True)
         return
 
@@ -1702,14 +1717,28 @@ async def girl_list(bot, ev: CQEvent):
         return
     cidlist = duel._get_cards(gid, uid)
     char = ""
+    count = 0
     for cid in cidlist:
         c = chara.fromid(cid)
         char += str(c.name)
         char += " "
+        count += 1
+        if count == 6:
+            char += '\n'
+            count = 0
     if char == "":
         msg = f'您尚未拥有女友,发送"贵族约会"来获取女友吧'
     else:
-        msg = f'您的女友为:\n{char}'
+        if len(char) <= 60:
+            msg = f'您的女友为:\n{char}'
+        else:
+            color = {}
+            color["r"] = 255
+            color["g"] = 255
+            color["b"] = 255
+            generator_img(1000, 500, color, "./hoshino/modules/priconne/pcr_duel/girl_list.png")
+            create_img(char, "./hoshino/modules/priconne/pcr_duel/girl_list.png")
+            msg = f'玩家的女友列表如下:[CQ:image,file=./hoshino/modules/priconne/pcr_duel/girl_list.png]'
     await bot.send(ev, msg, at_sender=True)
 
 
