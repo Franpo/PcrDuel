@@ -1732,13 +1732,14 @@ async def girl_list(bot, ev: CQEvent):
         if len(char) <= 60:
             msg = f'您的女友为:\n{char}'
         else:
+            img_path = "./res/img/girl_list.png"
             color = {}
             color["r"] = 255
             color["g"] = 255
             color["b"] = 255
-            generator_img(1000, 500, color, "./hoshino/modules/priconne/pcr_duel/girl_list.png")
-            create_img(char, "./hoshino/modules/priconne/pcr_duel/girl_list.png")
-            msg = f'玩家的女友列表如下:[CQ:image,file=./hoshino/modules/priconne/pcr_duel/girl_list.png]'
+            generator_img(800, 500, color, img_path)
+            create_img(char, img_path)
+            msg = R.img("girl_list.png").cqcode
     await bot.send(ev, msg, at_sender=True)
 
 
